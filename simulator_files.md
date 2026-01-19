@@ -57,14 +57,14 @@ Motor: State transition 2 -&gt; 3 (CW: 0x0007)
     int16_t target_torque<span class="token punctuation">;</span>      <span class="token comment">// Offset 2</span>
     int8_t operation_mode<span class="token punctuation">;</span>      <span class="token comment">// Offset 4</span>
     
-    <span class="token comment">// Simulator → Master (18 bytes)</span>
-    uint16_t error_code<span class="token punctuation">;</span>        <span class="token comment">// Read-only</span>
-    uint16_t status_word<span class="token punctuation">;</span>       <span class="token comment">// Offset 5</span>
-    int8_t mode_display<span class="token punctuation">;</span>        <span class="token comment">// Offset 7</span>
-    int32_t actual_position<span class="token punctuation">;</span>    <span class="token comment">// Offset 8</span>
-    int32_t actual_velocity<span class="token punctuation">;</span>    <span class="token comment">// Offset 12</span>
-    int32_t following_error<span class="token punctuation">;</span>    <span class="token comment">// Read-only</span>
-    int16_t actual_torque<span class="token punctuation">;</span>      <span class="token comment">// Offset 16</span>
+    // Simulator → Master (18 bytes)
+    uint16_t error_code;  // Read-only
+    uint16_t status_word; // Offset 5
+    int8_t mode_display; // Offset 7
+    int32_t actual_position; // Offset 8
+    int32_t actual_velocity; // Offset 12
+    int32_t following_error; // Read-only
+    int16_t actual_torque; // Offset 16
     
     <span class="token comment">// Synchronization</span>
     pthread_mutex_t mutex<span class="token punctuation">;</span>
