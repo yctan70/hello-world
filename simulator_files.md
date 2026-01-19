@@ -52,10 +52,10 @@ Motor: State transition 2 -&gt; 3 (CW: 0x0007)
 <h3 id="shared-memory-structure">3. Shared Memory Structure</h3>
 <p>Defined in both <code>shm_sim.c</code> and <code>ecrt_shm_shim.c</code>:</p>
 <pre class=" language-c"><code class="prism  language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token punctuation">{</span>
-    <span class="token comment">// Master → Simulator (3 bytes + padding)</span>
-    uint16_t control_word<span class="token punctuation">;</span>      <span class="token comment">// Offset 0</span>
-    int16_t target_torque<span class="token punctuation">;</span>      <span class="token comment">// Offset 2</span>
-    int8_t operation_mode<span class="token punctuation">;</span>      <span class="token comment">// Offset 4</span>
+    // Master → Simulator (3 bytes + padding)
+    uint16_t control_word; // Offset 0</span>
+    int16_t target_torque; // Offset 2</span>
+    int8_t operation_mode; // Offset 4</span>
     
     // Simulator → Master (18 bytes)
     uint16_t error_code;  // Read-only
@@ -66,11 +66,11 @@ Motor: State transition 2 -&gt; 3 (CW: 0x0007)
     int32_t following_error; // Read-only
     int16_t actual_torque; // Offset 16
     
-    <span class="token comment">// Synchronization</span>
-    pthread_mutex_t mutex<span class="token punctuation">;</span>
-    uint32_t master_cycle_count<span class="token punctuation">;</span>
-    uint32_t sim_cycle_count<span class="token punctuation">;</span>
-    bool initialized<span class="token punctuation">;</span>
+    // Synchronization
+    pthread_mutex_t mutex;
+    uint32_t master_cycle_count;
+    uint32_t sim_cycle_count;
+    bool initialized;
 <span class="token punctuation">}</span> shm_pdo_t<span class="token punctuation">;</span>  <span class="token comment">// Total: 83 bytes</span>
 </code></pre>
 <p><strong>Location</strong>: <code>/dev/shm/ethercat_sim_pdo</code></p>
