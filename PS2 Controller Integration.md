@@ -4,6 +4,9 @@
 ---
 
 <h2 id="ps2-controller-integration">PS2 Controller Integration</h2>
+<h3 id="summary">Summary</h3>
+<p>Successfully integrated a Bluetooth PS2 controller (connected at <code>/dev/input/js0</code>) with the unitree_sdk2 framework. The controller data is now packed into the 40-byte<br>
+<code>wireless_remote</code>  field in the  <code>rt/lowstate</code>  message.</p>
 <h3 id="files-created">Files Created</h3>
 <h4 id="ps2_joystick.h"><code>ps2_joystick.h</code></h4>
 <p>Header file defining:</p>
