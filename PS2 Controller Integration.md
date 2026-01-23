@@ -37,7 +37,7 @@
 <li><code>src/CMakeLists.txt</code>  - Added build target</li>
 </ul>
 <h3 id="fixing-ps2-button-mapping">Fixing PS2 Button Mapping</h3>
-<p>Updated the button mapping in <code>ps2_joystick.h</code> to match your controller:</p>
+<p>Updated the button mapping in <code>ps2_joystick.h</code> to match the controller:</p>
 
 <table>
 <thead>
