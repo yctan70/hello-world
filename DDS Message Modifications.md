@@ -1,4 +1,4 @@
-# CycloneDDS Message Modifications Walkthrough
+# CycloneDDS Message Modifications
 
 This document describes the modifications made to the `cyclonedds_ws` messages to support only the G1 robot type and replace the Dex3 hand with the LS (Leadshine) hand.
 
