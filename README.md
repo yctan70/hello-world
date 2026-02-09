@@ -34,27 +34,27 @@ The system consists of three isolated layers interacting via Shared Memory (IPC)
 
 ```mermaid
 graph TD
-    subgraph "Real-Time Core (ec_rt_thread)"
+    subgraph RTC["Real-Time Core (ec_rt_thread)"]
         FSM[Finite State Machine]
-        EC[EtherCAT Masters 0-3]
+        EC["EtherCAT Masters 0-3"]
         Mix[Mixed Motor Control]
         FSM --> Mix --> EC
     end
 
-    subgraph "IPC Layer"
-        SHM[Shared Memory (/dev/shm)]
+    subgraph IPC["IPC Layer"]
+        SHM["Shared Memory (/dev/shm)"]
     end
 
-    subgraph "Bridge Layer (User Space)"
+    subgraph BL["Bridge Layer (User Space)"]
         UB[unitree_bridge]
         GUI[Python Motor GUI]
         
-        UB --"rt/lowstate"--> DDS
+        UB --"rt/lowstate"--> DDS[DDS Network]
         UB --"rt/lowcmd"--> DDS
         UB --"rt/hand/..."--> DDS
     end
 
-    subgraph "Peripherals"
+    subgraph Peri["Peripherals"]
         PS2[PS2 Controller]
         IMU[Yesense IMU]
     end
@@ -137,5 +137,7 @@ python3 python/motor_gui.py
 
 ## Documentation Reference
 *   [FSM Implementation](FSM_IMPLEMENTATION.md) - Detailed FSM interactions.
-*   [G1 Redefinition](hello_world_repo/G1%20Robot%20Redefinition.md) - Joint mapping details.
-*   [Simulator Guide](hello_world_repo/simulator_files.md) - Using the shared memory simulator.
+*   [G1 Redefinition](docs/G1%20Robot%20Redefinition.md) - Joint mapping details.
+*   [Motor Test GUI](docs/Motor%20Test%20GUI.md) - Guide for using the Python visualization tool.
+*   [Yesense IMU](docs/Yesense%20IMU.md) - Details on the IMU integration and data format.
+*   [Simulator Guide](docs/simulator_files.md) - Using the shared memory simulator.
