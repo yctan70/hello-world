@@ -167,20 +167,20 @@ From the RT thread terminal, you should see:
                 ▼ (Shared Memory)
 ┌─────────────────────────────────────────┐
 │      RT Thread (ec_rt_thread)           │
-│  ┌─────────────────────────────────┐   │
-│  │  G1 FSM (g1_fsm.c)              │   │
-│  │  - Reads fsm_id from shm        │   │
-│  │  - Manages state transitions    │   │
-│  │  - Generates motor commands     │   │
-│  └─────────────────────────────────┘   │
+│  ┌─────────────────────────────────┐    │
+│  │  G1 FSM (g1_fsm.c)              │    │
+│  │  - Reads fsm_id from shm        │    │
+│  │  - Manages state transitions    │    │
+│  │  - Generates motor commands     │    │
+│  └─────────────────────────────────┘    │
 │                │                        │
 │                ▼                        │
-│  ┌─────────────────────────────────┐   │
-│  │  Motor Controllers              │   │
-│  │  - SE motors (legs)             │   │
-│  │  - LS motors (arms, waist)      │   │
-│  │  - LS hands                     │   │
-│  └─────────────────────────────────┘   │
+│  ┌─────────────────────────────────┐    │
+│  │  Motor Controllers              │    │
+│  │  - SE motors (legs)             │    │
+│  │  - LS motors (arms, waist)      │    │
+│  │  - LS hands                     │    │
+│  └─────────────────────────────────┘    │
 └───────────────┬─────────────────────────┘
                 │
                 ▼
