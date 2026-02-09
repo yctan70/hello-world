@@ -136,7 +136,7 @@ python3 python/motor_gui.py
 ```
 
 ## Documentation Reference
-*   [FSM Implementation](FSM_IMPLEMENTATION.md) - Detailed FSM interactions.
+*   [FSM Implementation](docs/FSM_IMPLEMENTATION.md) - Detailed FSM interactions.
 *   [G1 Redefinition](docs/G1%20Robot%20Redefinition.md) - Joint mapping details.
 *   [Motor Test GUI](docs/Motor%20Test%20GUI.md) - Guide for using the Python visualization tool.
 *   [Yesense IMU](docs/Yesense%20IMU.md) - Details on the IMU integration and data format.
