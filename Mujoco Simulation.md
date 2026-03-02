@@ -19,13 +19,25 @@ robot. It supports two operating modes:
 ```mermaid
 flowchart TD
     Client["g1_loco_client_test"]
-    LocoServer["LocoServer\n(in sim_bridge)"]
-    ShmLoco["SharedMemory.loco\n(fsm_id, velocity[3], ...)"]
-    FSM["FSM + CPG Gait Generator"]
-    ShmMotors["SharedMemory.motors[]\n(target_pos, KP, KD)"]
+    Joystick["PS2 Joystick\n(/dev/input/js0, optional)"]
+    LocoServer["LocoServer / MotionSwitcherServer\n(in sim_bridge)"]
+    ShmLoco["shm.loco\n(fsm_id, velocity)"]
+    ShmJoystick["shm.joystick"]
+    ShmState["shm.motors[].position\nshm.imu"]
 
-    subgraph bridge ["mujoco_sim_bridge"]
-        direction TB
+    subgraph normal ["Normal FSM states"]
+        FSM["FSM\n(STAND_UP / LOCOMOTION / ...)"]
+        ArmTask["arm_task\n(arm gestures)"]
+        Balance["balance controller\n(if ENABLE_BALANCE)"]
+    end
+
+    ShmMotors["shm.motors[]\n(target_pos, KP, KD)"]
+
+    subgraph rl ["RL_INFERENCE mode (fsm_id=10)"]
+        RLRunner["g1_rl_runner.py\n(external ONNX process)"]
+    end
+
+    subgraph bridge ["mujoco_sim_bridge (1kHz loop)"]
         PubCmd["pub rt/lowcmd"]
         SubState["sub rt/lowstate"]
     end
@@ -34,19 +46,29 @@ flowchart TD
 
     Client -- "DDS rt/api/sport" --> LocoServer
     LocoServer --> ShmLoco
+    Joystick --> ShmJoystick
     ShmLoco --> FSM
     FSM --> ShmMotors
-    ShmMotors --> bridge
+    ArmTask --> ShmMotors
+    Balance --> ShmMotors
+    ShmJoystick --> RLRunner
+    ShmState --> RLRunner
+    RLRunner --> ShmMotors
+    ShmMotors --> PubCmd
     PubCmd --> MuJoCo
     MuJoCo --> SubState
+    SubState --> ShmState
 ```
 
 The bridge creates its own shared memory segment, initializes the FSM and service servers,
 then runs a 1kHz control loop:
 
 1. **receive_lowstate** — DDS take from `rt/lowstate`, write motor feedback + IMU to shared memory
-2. **fsm_update** — `g1_fsm_update()` reads `shm.loco`, generates motor targets in `shm.motors[]`
-3. **publish_lowcmd** — Read `shm.motors[]`, build `LowCmd_` message, DDS write to `rt/lowcmd`
+2. **joystick_read** — Poll PS2 joystick, write axes + buttons to `shm.joystick`
+3. **fsm_update** — `g1_fsm_update()` reads `shm.loco`, generates motor targets in `shm.motors[]`
+   - **arm_task** and **balance controller** also write targets (both skipped during `RL_INFERENCE`)
+   - During `RL_INFERENCE` the FSM only performs watchdog + orientation safety checks; the external `g1_rl_runner.py` owns the motor commands
+4. **publish_lowcmd** — Read `shm.motors[]`, build `LowCmd_` message, DDS write to `rt/lowcmd`
 
 ### Mirror Mode (digital twin with real hardware)
 
@@ -55,17 +77,18 @@ flowchart TD
     Client["g1_loco_client_test"]
 
     subgraph hardware ["Real Hardware Path (enp3s0)"]
-        direction TB
-        UBridge["unitree_bridge + RT thread"]
-        HW_FSM["LocoServer → FSM → SharedMemory"]
-        EtherCAT["EtherCAT Motors"]
-        UBridge --> HW_FSM --> EtherCAT
+        UBridge["unitree_bridge\n(LocoServer + DDS services)"]
+        EcRT["ec_rt_thread\n(FSM + EtherCAT)"]
+        ShmData["SharedMemory\n(motors, imu, joystick, loco)"]
+        Actuators["EtherCAT Motors"]
+        UBridge <--> ShmData
+        EcRT <--> ShmData
+        EcRT <--> Actuators
     end
 
-    ShmMotors["SharedMemory.motors[]\n(read-only)"]
+    RLRunner["g1_rl_runner.py\n(optional — RL_INFERENCE)"]
 
-    subgraph mirror ["mujoco_sim_bridge --mirror"]
-        direction TB
+    subgraph mirror ["mujoco_sim_bridge --mirror (lo)"]
         PubCmd["pub rt/lowcmd"]
         SubState["sub rt/lowstate\n(drain/discard)"]
     end
@@ -73,8 +96,9 @@ flowchart TD
     MuJoCo["MuJoCo G1Bridge\n(physics sim on loopback)"]
 
     Client -- "DDS (enp3s0)" --> UBridge
-    HW_FSM -- "writes" --> ShmMotors
-    ShmMotors -- "reads" --> mirror
+    ShmData -- "target_pos, KP, KD" --> PubCmd
+    ShmData -- "motors.position\nimu, joystick" --> RLRunner
+    RLRunner -. "RL_INFERENCE only" .-> ShmData
     PubCmd --> MuJoCo
     MuJoCo --> SubState
 ```
@@ -85,6 +109,10 @@ The bridge attaches to the existing shared memory (owned by the RT thread), then
 1. **publish_lowcmd** — Read `shm.motors[]`, build `LowCmd_`, DDS write to `rt/lowcmd`
 2. **receive_lowstate** — Drain `rt/lowstate` (discard — real feedback comes from hardware)
 
+`g1_rl_runner.py` can run alongside as an optional participant: it reads joint state and IMU
+from shared memory, writes RL policy targets, and the mirror bridge automatically visualizes
+those commands in MuJoCo.
+
 ### DDS Isolation
 
 Hardware and simulation run on separate network interfaces within the same DDS domain 0:
@@ -92,16 +120,13 @@ Hardware and simulation run on separate network interfaces within the same DDS d
 ```mermaid
 flowchart LR
     subgraph domain0 ["DDS Domain 0"]
-        direction TB
         subgraph hw_net ["enp3s0 (Physical NIC)"]
-            direction LR
             HW_Bridge["unitree_bridge"]
             HW_RT["RT thread"]
             HW_Topics["rt/lowcmd\nrt/lowstate\nrt/api/sport/*"]
         end
 
         subgraph lo_net ["lo (Loopback)"]
-            direction LR
             Sim_Bridge["mujoco_sim_bridge"]
             MuJoCo["MuJoCo G1Bridge"]
             Lo_Topics["rt/lowcmd\nrt/lowstate\nrt/api/sport/*"]
@@ -128,10 +153,12 @@ stateDiagram-v2
     STAND_UP --> LOCOMOTION: fsm_id=500
     STAND_UP --> SQUAT: fsm_id=2
     STAND_UP --> SIT: fsm_id=3
+    STAND_UP --> RL_INFERENCE: fsm_id=10
     LOCOMOTION --> STAND_UP: fsm_id=4
     LOCOMOTION --> DAMP: fsm_id=1
     SQUAT --> STAND_UP: fsm_id=4
     SIT --> STAND_UP: fsm_id=4
+    RL_INFERENCE --> DAMP: watchdog timeout\nor bad IMU / fsm_id=1
 
     state ZERO_TORQUE {
         [*]: All motors disabled
@@ -140,10 +167,13 @@ stateDiagram-v2
         [*]: Low KP, high KD
     }
     state STAND_UP {
-        [*]: Interpolate to standing pose
+        [*]: Interpolate to RL default pose
     }
     state LOCOMOTION {
         [*]: CPG gait generator active
+    }
+    state RL_INFERENCE {
+        [*]: Python runner owns all 29 joints
     }
 ```
 
@@ -155,6 +185,7 @@ sequenceDiagram
     participant Bridge as mujoco_sim_bridge
     participant SHM as SharedMemory
     participant FSM as FSM + Gait
+    participant RL as g1_rl_runner.py
     participant Client as g1_loco_client
 
     Client->>SHM: DDS rt/api/sport → LocoServer writes shm.loco
@@ -162,9 +193,18 @@ sequenceDiagram
     loop Every 1ms
         MuJoCo->>Bridge: DDS rt/lowstate (motor pos/vel/torque + IMU)
         Bridge->>SHM: Write motors[].position, imu
-        SHM->>FSM: Read shm.loco (fsm_id, velocity)
-        FSM->>SHM: Write motors[].target_pos, KP, KD
-        Bridge->>Bridge: Read shm.motors[], build LowCmd_
+
+        alt fsm_id = RL_INFERENCE (10)
+            RL->>SHM: Read motors[].position, imu, joystick
+            RL->>SHM: Write motors[].target_pos/KP/KD + loco.timestamp
+            Note over FSM: Safety only: watchdog + orientation check
+        else Normal FSM state
+            SHM->>FSM: Read shm.loco (fsm_id, velocity)
+            FSM->>SHM: Write motors[].target_pos, KP, KD
+            Note over FSM: arm_task + balance also contribute targets
+        end
+
+        Bridge->>SHM: Read shm.motors[], build LowCmd_
         Bridge->>MuJoCo: DDS rt/lowcmd (q, dq, tau, kp, kd)
     end
 ```
@@ -196,9 +236,9 @@ No joint remapping is needed between `g1_motor_control` and `unitree_mujoco`.
 
 | File | Change |
 |------|--------|
-| `examples/CMakeLists.txt` | Added `mujoco_sim_bridge` build target with DDS, shared memory, FSM, and gait dependencies |
+| `examples/CMakeLists.txt` | Added `mujoco_sim_bridge` build target; added `ps2_joystick.c` to sources |
 | `src/g1_fsm.h` | Added `last_update_time` field to `G1FSMContext` for dynamic dt computation |
-| `src/g1_fsm.c` | Replaced hardcoded `dt = 0.001f` with elapsed-time computation so the gait generator works at any loop frequency |
+| `src/g1_fsm.c` | Dynamic dt; added `FSM_RL_INFERENCE` state (watchdog + orientation safety); `POSE_STAND` updated to match RL default; 12-joint leg pose coverage; signed watchdog comparison; timestamp seeded on RL entry |
 
 ### Key Dependencies Reused
 
@@ -210,8 +250,10 @@ No joint remapping is needed between `g1_motor_control` and `unitree_mujoco`.
 | Service base | `src/g1_service_server.h/.cpp` | DDS service server base class |
 | Robot state | `src/g1_robot_state_server.h/.cpp` | Robot state query service |
 | Motion switcher | `src/g1_motion_switcher_server.h/.cpp` | Motion mode switching service |
-| FSM | `src/g1_fsm.h/.c` | State machine (ZERO_TORQUE → STAND_UP → LOCOMOTION) |
+| FSM | `src/g1_fsm.h/.c` | State machine (ZERO_TORQUE → STAND_UP → LOCOMOTION → RL_INFERENCE) |
 | Gait generator | `src/g1_gait.h/.c` | CPG walking gait for 12 leg joints |
+| Arm task | `src/g1_arm_task.h/.c` | Arm gesture controller (skipped during RL_INFERENCE) |
+| PS2 joystick | `src/ps2_joystick.h/.c` | Read PS2 controller axes + buttons into `shm.joystick` |
 | Shared memory | `src/ec_shared_mem.h/.c` | create/attach/lock/unlock/destroy |
 | Robot config | `src/g1_robot_config.h` | Joint indices, default KP/KD arrays |
 
