@@ -111,4 +111,66 @@ Hardware / Simulation
 <li>Deploy GR00T-WholeBodyControl as the mid-level WBC layer.</li>
 <li>Run GR00T N1.6 VLA on top for language-conditioned task execution.</li>
 </ol>
+<h2 id="how-vla-and-rl-are-combined">How VLA and RL Are Combined</h2>
+<p>It’s a <strong>hierarchical stack</strong> — VLA and RL are not fused into one model. They run at different<br>
+frequencies and handle different parts of the body.</p>
+<h3 id="the-architecture">The Architecture</h3>
+<pre><code>  ┌──────────────────────────────────────────────┐
+  │  GR00T N1.5/N1.6  (VLA)          ~10–30 Hz   │
+  │  - Language instruction → task plan          │
+  │  - Outputs: end-effector targets (6-DOF pose)│
+  └──────────────────────┬───────────────────────┘
+                         │ arm workspace targets
+  ┌──────────────────────▼────────────────────────┐
+  │  Whole-Body Controller (WBC)      ~50 Hz      │
+  │  ┌─────────────────┐ ┌──────────────────────┐ │
+  │  │  Upper body     │ │  Lower body          │ │
+  │  │  IK solver      │ │  RL policy (PPO)     │ │
+  │  │  (kinematic)    │ │  (your trained net)  │ │
+  │  └────────┬────────┘ └───────────┬──────────┘ │
+  └───────────┼──────────────────────┼────────────┘
+              │  arm joint targets   │  leg joint targets
+              └──────────┬───────────┘
+  ┌──────────────────────▼───────────────────────┐
+  │  Hardware / Simulation           1000 Hz     │
+  │  Motor PD controllers                        │
+  └──────────────────────────────────────────────┘
+</code></pre>
+<h3 id="what-each-layer-does">What each layer does</h3>
+<h4 id="vla-gr00t-n1.6-—-the-brain">VLA (GR00T N1.6) — the “brain”</h4>
+<ul>
+<li>Takes camera images + language command as input</li>
+<li>Reasons about the task: “pick up the cup and walk to the table”</li>
+<li>Outputs arm end-effector pose targets — not joint angles, not torques</li>
+<li>Runs slowly (~10–30 Hz); completely unaware of leg dynamics</li>
+</ul>
+<h4 id="rl-policy-—-the-legs">RL policy — the “legs”</h4>
+<ul>
+<li>Your standard PPO-trained locomotion policy (exactly what we’re training for H2)</li>
+<li>Input: proprioception (joint pos/vel, IMU, velocity command)</li>
+<li>Output: 12 leg joint position targets</li>
+<li>Runs at 50 Hz, isolated from VLA</li>
+<li>The velocity command it tracks can come from the VLA or from a joystick</li>
+</ul>
+<h4 id="ik-solver-—-the-arms-in-wbc-not-a-learned-model">IK solver — the “arms” (in WBC, not a learned model)</h4>
+<ul>
+<li>Converts VLA’s end-effector targets to arm joint angles</li>
+<li>Runs at the same rate as the RL policy (~50 Hz)</li>
+<li>Operates in the base frame — does not account for leg motion coupling</li>
+</ul>
+<h3 id="why-the-legs-and-arms-are-decoupled">Why the legs and arms are decoupled</h3>
+<p>The WBC treats the torso as a fixed reference frame for IK. This works when locomotion is slow and<br>
+smooth, but it means the arms don’t actively compensate for body sway. That’s the key limitation<br>
+— and why unified policies like GEAR-SONIC or FALCON exist.</p>
+<hr>
+<h3 id="what-this-means-for-h2-practically">What this means for H2 practically</h3>
+<p>The RL locomotion policy you’re training now is the lower-body component of this stack. Once it<br>
+works, the path to loco-manipulation is:</p>
+<p><strong>Step 1</strong> (now):    Train RL locomotion policy  ← current work<br>
+<strong>Step 2</strong>:          Verify sim-to-real on H2 hardware<br>
+<strong>Step 3</strong>:          Integrate GR00T-WBC: wrap the RL policy as the lower-body provider, add IK for arms via DDS<br>
+<strong>Step 4</strong> (later):  Layer GR00T N1.6 VLA on top for language-conditioned tasks</p>
+<p>The catch for H2 is that no GR00T pre-trained checkpoint exists for it. The VLA would need to be<br>
+fine-tuned or a separate manipulation policy trained. The decoupled approach still makes sense for<br>
+H2 precisely because it lets you solve each layer independently on a new platform.</p>
 
